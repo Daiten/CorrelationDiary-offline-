@@ -87,6 +87,24 @@
   .io-btn:hover{border-color:#0077cc;color:#7dd3fc;background:rgba(0,120,200,0.08);}
   .io-btn.flash-green{border-color:#00ff9d;color:#00ff9d;}
   .io-btn.flash-red{border-color:#ff4d6d;color:#ff4d6d;}
+  /* role badges & buttons */
+  .role-badge{display:inline-block;border-radius:2px;padding:1px 6px;font-size:10px;letter-spacing:0.06em;font-weight:600;vertical-align:middle;margin-left:3px;}
+  .role-cause{background:rgba(255,180,0,0.12);border:1px solid rgba(255,180,0,0.3);color:#ffd060;}
+  .role-effect{background:rgba(255,80,100,0.12);border:1px solid rgba(255,80,100,0.3);color:#ff8fa3;}
+  .role-both{background:rgba(140,80,255,0.12);border:1px solid rgba(140,80,255,0.3);color:#c4a0ff;}
+  .role-none{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:#4a6080;}
+  .role-btn{background:none;border:1px solid #1a2535;border-radius:2px;font-family:inherit;font-size:10px;padding:1px 7px;cursor:pointer;transition:all 0.15s;color:#3a5070;}
+  .role-btn:hover{border-color:#4a6080;color:#a0c0e0;}
+  .role-btn.active-cause{background:rgba(255,180,0,0.15);border-color:rgba(255,180,0,0.5);color:#ffd060;}
+  .role-btn.active-effect{background:rgba(255,80,100,0.15);border-color:rgba(255,80,100,0.5);color:#ff8fa3;}
+  .role-btn.active-both{background:rgba(140,80,255,0.15);border-color:rgba(140,80,255,0.5);color:#c4a0ff;}
+  /* inline role picker shown after logging */
+  .role-picker-row{display:flex;align-items:center;gap:8px;padding:5px 10px;background:rgba(0,0,0,0.2);border-left:2px solid #1a3050;border-radius:0 3px 3px 0;margin-bottom:3px;flex-wrap:wrap;}
+  .role-picker-tag{color:#7dd3fc;font-size:11px;min-width:80px;}
+  /* tags manager */
+  .tags-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-left:2px solid #1a2535;margin-bottom:4px;border-radius:0 3px 3px 0;transition:background 0.15s;}
+  .tags-row:hover{background:rgba(255,255,255,0.02);}
+  .tags-row-name{flex:1;color:#c8d4e8;font-size:12px;}
 </style>
 </head>
 <body>
@@ -94,7 +112,7 @@
 <div class="header">
   <div class="header-top">
     <span class="logo">◈ CORRELdiary</span>
-    <span class="subtitle">v1.2 — personal pattern tracker</span>
+    <span class="subtitle">v1.3 — personal pattern tracker</span>
     <span class="stats" id="stats">0 entries · 0 tags</span>
     <div style="display:flex;gap:6px;margin-left:16px">
       <button class="io-btn" onclick="exportData()" title="Export all entries to a JSON backup file">↑ export</button>
@@ -107,6 +125,7 @@
     <button class="nav-btn active" onclick="switchView('log')">log</button>
     <button class="nav-btn" onclick="switchView('correlations')">correlations</button>
     <button class="nav-btn" onclick="switchView('heatmap')">heatmap</button>
+    <button class="nav-btn" onclick="switchView('tags')">tags</button>
   </div>
 </div>
 
@@ -124,6 +143,7 @@
       <span id="dt-hint" style="display:none;color:#2a6a4a;font-size:11px"></span>
     </div>
     <div class="chips" id="suggest-chips"></div>
+    <div id="inline-role-picker" style="display:none;margin-bottom:16px;padding:10px 12px;background:rgba(0,60,100,0.08);border:1px solid #1a3050;border-radius:3px"></div>
     <div class="filter-section" id="filter-section" style="display:none">
       <div class="section-label">— filter by tag —</div>
       <div id="filter-tags"></div>
@@ -142,24 +162,68 @@
     <div class="section-label">— time-of-day heatmap (top 12 tags) —</div>
     <div id="heatmap-content"></div>
   </div>
+
+  <!-- TAGS VIEW -->
+  <div id="view-tags" style="display:none">
+    <div class="section-label">— tag roles — used to filter correlations —</div>
+    <div id="tags-content"></div>
+  </div>
 </div>
 
 <script>
 const STORAGE_KEY = 'correlation-diary-entries';
+const ROLES_KEY   = 'correlation-diary-roles';
 const SAMPLE_TAGS = ['coffee','alcohol','exercise','meditation','good sleep','poor sleep','stress','sugar','headache','energy high','brain fog','anxiety','productive','tired'];
 
 let entries = [];
+let tagRoles = {}; // { tagName: 'cause'|'effect'|'both' }  — unset = no role
 let currentView = 'log';
 let filterTag = '';
 let corrMin = 0;
-let corrSort = {col:'phi', dir:'desc'}; // col: 'a'|'b'|'phi'|'n', dir: 'asc'|'desc'
+let corrSort = {col:'phi', dir:'desc'};
 let corrSearch = '';
+let pendingRoleTags = []; // tags from the most recent entry waiting for role assignment
 
 // Load
 try { const r = localStorage.getItem(STORAGE_KEY); if(r) entries = JSON.parse(r); } catch{}
+try { const r = localStorage.getItem(ROLES_KEY);   if(r) tagRoles = JSON.parse(r); } catch{}
 
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch{}
+  try { localStorage.setItem(ROLES_KEY,   JSON.stringify(tagRoles)); } catch{}
+}
+
+function setRole(tag, role) {
+  // Toggle off if clicking same role
+  if(tagRoles[tag] === role) delete tagRoles[tag];
+  else tagRoles[tag] = role;
+  save();
+  // Re-render whatever is currently showing, plus refresh inline picker if visible
+  const picker = document.getElementById('inline-role-picker');
+  if(picker) renderInlineRolePicker(pendingRoleTags);
+  if(currentView==='tags') renderTags();
+  if(currentView==='correlations') renderCorrelations();
+  // refresh tag pills in log to show updated badges
+  if(currentView==='log') renderLog();
+}
+
+function roleLabel(tag) {
+  const r = tagRoles[tag];
+  if(!r) return '';
+  if(r==='cause')  return '<span class="role-badge role-cause">C</span>';
+  if(r==='effect') return '<span class="role-badge role-effect">E</span>';
+  if(r==='both')   return '<span class="role-badge role-both">~</span>';
+  return '';
+}
+
+function roleBtns(tag, context) {
+  // context: 'inline' | 'tags'
+  const r = tagRoles[tag]||'';
+  return `
+    <button class="role-btn ${r==='cause'?'active-cause':''}"  onclick="setRole('${escHtml(tag)}','cause')"  title="Cause — can drive effects">C</button>
+    <button class="role-btn ${r==='effect'?'active-effect':''}" onclick="setRole('${escHtml(tag)}','effect')" title="Effect — result of causes">E</button>
+    <button class="role-btn ${r==='both'?'active-both':''}"   onclick="setRole('${escHtml(tag)}','both')"   title="Both — can be either">~</button>
+  `;
 }
 
 function parseText(t) {
@@ -180,10 +244,10 @@ function allTags() {
 
 function switchView(v) {
   currentView = v;
-  ['log','correlations','heatmap'].forEach(x=>{
+  ['log','correlations','heatmap','tags'].forEach(x=>{
     document.getElementById('view-'+x).style.display = x===v?'block':'none';
     document.querySelectorAll('.nav-btn').forEach((b,i)=>{
-      b.classList.toggle('active', ['log','correlations','heatmap'][i]===v);
+      b.classList.toggle('active', ['log','correlations','heatmap','tags'][i]===v);
     });
   });
   render();
@@ -225,7 +289,6 @@ function addEntry() {
   const tags = parseText(inp.value);
   if(!tags.length) return;
 
-  // Use custom datetime if set, else now
   const dtInput = document.getElementById('entry-dt');
   let timestamp;
   if(dtInput.style.display !== 'none' && dtInput.value) {
@@ -235,9 +298,11 @@ function addEntry() {
   }
 
   entries.unshift({id: Date.now().toString(), timestamp, tags, raw: inp.value.trim()});
-  // Re-sort by timestamp descending after inserting a past entry
   entries.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
   inp.value = '';
+
+  // Find tags that have no role yet — prompt inline
+  pendingRoleTags = tags.filter(t => !tagRoles[t]);
 
   // Reset datetime picker
   dtInput.style.display = 'none';
@@ -252,6 +317,30 @@ function addEntry() {
   btn.classList.add('flash');
   setTimeout(()=>{btn.textContent='+ LOG';btn.classList.remove('flash');},600);
   render();
+  // After render, inject inline picker if there are unassigned tags
+  if(pendingRoleTags.length) renderInlineRolePicker(pendingRoleTags);
+}
+
+function renderInlineRolePicker(tags) {
+  const container = document.getElementById('inline-role-picker');
+  if(!container) return;
+  const unassigned = tags.filter(t => !tagRoles[t]);
+  if(!unassigned.length) { container.style.display='none'; return; }
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="color:#2a5070;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">— assign roles to new tags —</div>
+    ${unassigned.map(t=>`
+      <div class="role-picker-row">
+        <span class="role-picker-tag">${escHtml(t)}</span>
+        ${roleBtns(t,'inline')}
+        <span style="color:#2a4060;font-size:10px;margin-left:4px">${tagRoles[t]?'✓':''}</span>
+      </div>
+    `).join('')}
+    <div style="margin-top:6px">
+      <button class="io-btn" onclick="document.getElementById('inline-role-picker').style.display='none'" style="font-size:10px;padding:3px 10px">dismiss</button>
+      <span style="color:#2a4060;font-size:10px;margin-left:8px">unassigned tags treated as "both" in correlations</span>
+    </div>
+  `;
 }
 
 function deleteEntry(id) {
@@ -307,16 +396,22 @@ function phiColor(phi) {
   return '#8892a4';
 }
 
+function canBeCause(tag) {
+  const r = tagRoles[tag];
+  return !r || r==='cause' || r==='both';
+}
+function canBeEffect(tag) {
+  const r = tagRoles[tag];
+  return !r || r==='effect' || r==='both';
+}
+
 function computeCorrelations() {
-  // Build per-day structure: { date -> [ {tag, firstTime} ] }
-  // firstTime = earliest timestamp (ms) for that tag on that day
   const byDate = {};
   for(const e of entries){
     const day = e.timestamp.slice(0,10);
     const ms = new Date(e.timestamp).getTime();
     if(!byDate[day]) byDate[day] = {};
     for(const t of e.tags){
-      // Keep the earliest occurrence of each tag per day
       if(byDate[day][t] === undefined || ms < byDate[day][t]){
         byDate[day][t] = ms;
       }
@@ -327,28 +422,24 @@ function computeCorrelations() {
   const tags = [...new Set(entries.flatMap(e=>e.tags))];
   if(tags.length < 2 || days.length < 2) return [];
 
-  // For each ORDERED pair (a→b): count days where a appeared AND b appeared AFTER a
   const results = [];
   for(let i=0;i<tags.length;i++){
     for(let j=0;j<tags.length;j++){
       if(i===j) continue;
       const a=tags[i], b=tags[j];
-      // n11 = days where a happened AND b happened strictly after a
-      // n10 = days where a happened but b did NOT happen after a (b absent or b before a)
-      // n01 = days where b happened but a did NOT happen before b
-      // n00 = days where neither a nor b happened
+      // Role filter: a must be a valid cause, b must be a valid effect
+      if(!canBeCause(a) || !canBeEffect(b)) continue;
       let n11=0, n10=0, n01=0, n00=0;
       for(const day of days){
-        const tA = byDate[day][a]; // ms or undefined
+        const tA = byDate[day][a];
         const tB = byDate[day][b];
         const aPresent = tA !== undefined;
         const bAfterA  = tA !== undefined && tB !== undefined && tB > tA;
         const bPresent = tB !== undefined;
-
-        if(aPresent && bAfterA)       n11++; // a happened, b happened after
-        else if(aPresent && !bAfterA) n10++; // a happened, but b didn't follow
-        else if(!aPresent && bPresent)n01++; // b happened but a didn't precede it
-        else                          n00++; // neither
+        if(aPresent && bAfterA)        n11++;
+        else if(aPresent && !bAfterA)  n10++;
+        else if(!aPresent && bPresent) n01++;
+        else                           n00++;
       }
       const denom = Math.sqrt((n11+n10)*(n01+n00)*(n11+n01)*(n10+n00));
       if(!denom) continue;
@@ -356,17 +447,15 @@ function computeCorrelations() {
       results.push({a, b, phi, coOccurrences:n11});
     }
   }
-  // Deduplicate: keep only one entry per a→b pair (already directional, no dedup needed)
   return results.sort((x,y)=>Math.abs(y.phi)-Math.abs(x.phi));
 }
 
 function render() {
-  // stats
   document.getElementById('stats').textContent = `${entries.length} entries · ${allTags().length} tags`;
-
   if(currentView==='log') renderLog();
   else if(currentView==='correlations') renderCorrelations();
-  else renderHeatmap();
+  else if(currentView==='heatmap') renderHeatmap();
+  else if(currentView==='tags') renderTags();
 }
 
 function renderLog() {
@@ -411,7 +500,7 @@ function renderLog() {
         <div class="entry-row fade-in">
           <span class="entry-time">${formatTime(e.timestamp)}</span>
           <div class="entry-tags" id="entry-tags-${e.id}">
-            ${e.tags.map(t=>`<span class="tag-pill ${filterTag===t?'active':''}" onclick="setFilter('${escHtml(t)}')">${escHtml(t)}</span>`).join('')}
+            ${e.tags.map(t=>`<span class="tag-pill ${filterTag===t?'active':''}" onclick="setFilter('${escHtml(t)}')">${escHtml(t)}${roleLabel(t)}</span>`).join('')}
           </div>
           <div class="entry-actions">
             <button class="edit-btn" onclick="startEdit('${e.id}')">✎</button>
@@ -427,6 +516,51 @@ function appendChip(t) {
   const inp = document.getElementById('entry-input');
   inp.value = inp.value ? inp.value + ', ' + t : t;
   inp.focus();
+}
+
+function renderTags() {
+  const el = document.getElementById('tags-content');
+  const tags = allTags();
+  if(!tags.length){ el.innerHTML='<div class="empty">No tags yet. Start logging to create tags.</div>'; return; }
+
+  const counts = {};
+  for(const e of entries) for(const t of e.tags) counts[t]=(counts[t]||0)+1;
+
+  const roleOrder = {cause:0, both:1, effect:2, undefined:3};
+  const sorted = [...tags].sort((a,b)=>{
+    const ra = roleOrder[tagRoles[a]] ?? 3;
+    const rb = roleOrder[tagRoles[b]] ?? 3;
+    if(ra!==rb) return ra-rb;
+    return a.localeCompare(b);
+  });
+
+  el.innerHTML = `
+    <div style="color:#2a4060;font-size:11px;line-height:1.8;margin-bottom:16px">
+      Set each tag's role. Only <span class="role-badge role-cause">C</span> cause/both tags appear as the left side of correlations,
+      and only <span class="role-badge role-effect">E</span> effect/both tags appear on the right.
+      Unset tags are treated as <span class="role-badge role-both">~</span> both.
+    </div>
+    <div style="display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;padding:5px 10px;color:#2a4060;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid #1a2535;margin-bottom:4px">
+      <span></span><span>tag</span><span style="text-align:right;padding-right:8px">uses</span><span>role</span>
+    </div>
+    ${sorted.map(t=>{
+      const r = tagRoles[t];
+      const dot = r==='cause'?'#ffd060':r==='effect'?'#ff8fa3':r==='both'?'#c4a0ff':'#2a3a55';
+      return `<div class="tags-row">
+        <span style="width:6px;height:6px;border-radius:50%;background:${dot};display:inline-block;flex-shrink:0"></span>
+        <span class="tags-row-name">${escHtml(t)}${roleLabel(t)}</span>
+        <span style="color:#2a4060;font-size:11px;text-align:right;padding-right:16px">${counts[t]||0}×</span>
+        <span style="display:flex;gap:4px">${roleBtns(t,'tags')}</span>
+      </div>`;
+    }).join('')}
+    <div style="margin-top:20px;padding:12px 14px;background:rgba(0,170,255,0.03);border:1px solid #1a2535;border-radius:3px;color:#3a5570;font-size:11px;line-height:1.8">
+      <strong style="color:#4a7090">Legend:</strong>
+      <span class="role-badge role-cause">C</span> Cause — can be the left side of a correlation (e.g. coffee, stress) ·
+      <span class="role-badge role-effect">E</span> Effect — can be the right side (e.g. headache, energy high) ·
+      <span class="role-badge role-both">~</span> Both — appears on either side ·
+      unset = treated as both
+    </div>
+  `;
 }
 
 function sortCorrs(corrs) {
@@ -579,16 +713,17 @@ function renderHeatmap() {
 // ── Export ──────────────────────────────────────────────
 function exportData() {
   const payload = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    entries: entries
+    entries: entries,
+    tagRoles: tagRoles
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const dateStr = new Date().toISOString().slice(0,10);
   a.href = url;
-  a.download = `correlدiary-backup-${dateStr}.json`;
+  a.download = `correl-diary-backup-${dateStr}.json`;
   a.click();
   URL.revokeObjectURL(url);
   showToast(`✓ exported ${entries.length} entries`, 'green');
@@ -605,16 +740,16 @@ function importData(event) {
       // Accept both {version,entries:[]} and raw array formats
       const incoming = Array.isArray(data) ? data : (data.entries || []);
       if(!Array.isArray(incoming)) throw new Error('Invalid format');
-
-      // Validate basic shape
       const valid = incoming.filter(x => x.id && x.timestamp && Array.isArray(x.tags));
       if(valid.length === 0) { showToast('✕ no valid entries found', 'red'); return; }
-
-      // Merge: keep existing entries, add new ones that don't share an id
       const existingIds = new Set(entries.map(x=>x.id));
       const newEntries = valid.filter(x=>!existingIds.has(x.id));
       const merged = [...entries, ...newEntries].sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
       entries = merged;
+      // Merge tagRoles if present in backup
+      if(data.tagRoles && typeof data.tagRoles==='object'){
+        tagRoles = {...data.tagRoles, ...tagRoles}; // existing roles take priority
+      }
       save();
       render();
       showToast(`✓ imported ${newEntries.length} new entries (${valid.length - newEntries.length} duplicates skipped)`, 'green');
