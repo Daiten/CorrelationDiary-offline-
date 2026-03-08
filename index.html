@@ -32,7 +32,7 @@
   .chips{margin-bottom:24px;}
   .suggest-chip{display:inline-block;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:2px;padding:2px 8px;margin:2px;font-size:11px;color:#556a85;cursor:pointer;transition:all 0.15s;}
   .suggest-chip:hover{border-color:#0077aa;color:#7dd3fc;background:rgba(0,120,200,0.1);}
-  .tag-pill{display:inline-block;background:rgba(0,180,255,0.1);border:1px solid rgba(0,180,255,0.25);border-radius:2px;padding:1px 7px;margin:2px 3px 2px 0;font-size:11px;color:#7dd3fc;cursor:pointer;transition:all 0.15s;}
+  .tag-pill{display:inline-flex;align-items:center;background:rgba(0,180,255,0.1);border:1px solid rgba(0,180,255,0.25);border-radius:2px;padding:2px 9px;margin:2px 3px 2px 0;font-size:12px;color:#7dd3fc;cursor:pointer;transition:all 0.15s;}
   .tag-pill:hover{background:rgba(0,180,255,0.2);}
   .tag-pill.active{background:rgba(0,180,255,0.3);border-color:#38bdf8;color:#e0f2fe;}
   .filter-section{margin-bottom:20px;}
@@ -55,7 +55,7 @@
   .corr-search{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:3px;color:#e0eaf8;font-family:inherit;font-size:12px;padding:6px 12px;outline:none;transition:border-color 0.2s;width:180px;}
   .corr-search:focus{border-color:#00aaff;}
   .corr-table{display:grid;gap:1px;}
-  .corr-cols{grid-template-columns:140px 18px 140px 100px 1fr 52px;}
+  .corr-cols{grid-template-columns:minmax(90px,1.2fr) 18px minmax(90px,1.2fr) 96px 1fr 42px 36px;}
   .corr-header{display:grid;gap:8px;padding:6px 10px;color:#2a4060;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid #1a2535;}
   .corr-header span{cursor:pointer;user-select:none;transition:color 0.15s;}
   .corr-header span:hover{color:#7dd3fc;}
@@ -105,6 +105,26 @@
   .tags-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-left:2px solid #1a2535;margin-bottom:4px;border-radius:0 3px 3px 0;transition:background 0.15s;}
   .tags-row:hover{background:rgba(255,255,255,0.02);}
   .tags-row-name{flex:1;color:#c8d4e8;font-size:12px;}
+  /* category badge on tag pills */
+  .cat-dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:7px;vertical-align:middle;flex-shrink:0;}
+  /* category filter chips in correlations */
+  .cat-chip{display:inline-block;border-radius:2px;padding:2px 9px;margin:2px;font-size:11px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;opacity:0.55;}
+  .cat-chip:hover{opacity:0.85;}
+  .cat-chip.active{opacity:1;border-color:rgba(255,255,255,0.3);}
+  /* category group header in tags screen */
+  .cat-group-header{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:4px 10px;margin:12px 0 4px;border-left:3px solid;}
+  /* numeric value badge on tag pills */
+  .num-val{font-size:10px;opacity:0.85;margin-left:4px;font-weight:600;}
+  /* numeric input panel */
+  .num-panel{background:rgba(0,60,40,0.12);border:1px solid #1a3530;border-radius:3px;padding:10px 14px;margin-bottom:14px;}
+  .num-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;}
+  .num-row:last-child{margin-bottom:0;}
+  .num-label{color:#7dd3fc;font-size:12px;min-width:100px;}
+  .num-input{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:3px;color:#e0eaf8;font-family:inherit;font-size:13px;padding:4px 10px;width:80px;outline:none;text-align:center;}
+  .num-input:focus{border-color:#00aaff;}
+  input[type=range].num-slider{width:160px;accent-color:#00d4ff;}
+  /* corr type badge */
+  .corr-type{font-size:9px;letter-spacing:0.06em;padding:1px 5px;border-radius:2px;opacity:0.7;}
 </style>
 </head>
 <body>
@@ -112,7 +132,7 @@
 <div class="header">
   <div class="header-top">
     <span class="logo">◈ CORRELdiary</span>
-    <span class="subtitle">v1.3 — personal pattern tracker</span>
+    <span class="subtitle">v1.5 — personal pattern tracker</span>
     <span class="stats" id="stats">0 entries · 0 tags</span>
     <div style="display:flex;gap:6px;margin-left:16px">
       <button class="io-btn" onclick="exportData()" title="Export all entries to a JSON backup file">↑ export</button>
@@ -134,7 +154,7 @@
   <div id="view-log">
     <div class="section-label">— log entry —</div>
     <div class="input-row">
-      <input class="input-field" id="entry-input" placeholder="e.g.  coffee, meditation  or  headache  or  apple, bread, stressed" onkeydown="if(event.key==='Enter')addEntry()"/>
+      <input class="input-field" id="entry-input" placeholder="e.g.  coffee, mood:75, headache  (use tag:value for numeric tags)" onkeydown="if(event.key==='Enter')addEntry()" oninput="previewNumericPanel(this.value)"/>
       <button class="log-btn" id="log-btn" onclick="addEntry()">+ LOG</button>
     </div>
     <div class="dt-wrap">
@@ -143,9 +163,10 @@
       <span id="dt-hint" style="display:none;color:#2a6a4a;font-size:11px"></span>
     </div>
     <div class="chips" id="suggest-chips"></div>
+    <div id="num-input-panel" style="display:none"></div>
     <div id="inline-role-picker" style="display:none;margin-bottom:16px;padding:10px 12px;background:rgba(0,60,100,0.08);border:1px solid #1a3050;border-radius:3px"></div>
     <div class="filter-section" id="filter-section" style="display:none">
-      <div class="section-label">— filter by tag —</div>
+      <div class="section-label">— filter by category —</div>
       <div id="filter-tags"></div>
     </div>
     <div id="entries-list"></div>
@@ -165,7 +186,7 @@
 
   <!-- TAGS VIEW -->
   <div id="view-tags" style="display:none">
-    <div class="section-label">— tag roles — used to filter correlations —</div>
+    <div class="section-label">— tags · categories · roles —</div>
     <div id="tags-content"></div>
   </div>
 </div>
@@ -173,24 +194,33 @@
 <script>
 const STORAGE_KEY = 'correlation-diary-entries';
 const ROLES_KEY   = 'correlation-diary-roles';
+const META_KEY    = 'correlation-diary-meta';
 const SAMPLE_TAGS = ['coffee','alcohol','exercise','meditation','good sleep','poor sleep','stress','sugar','headache','energy high','brain fog','anxiety','productive','tired'];
 
 let entries = [];
-let tagRoles = {}; // { tagName: 'cause'|'effect'|'both' }  — unset = no role
+let tagRoles = {};
+let tagMeta  = {}; // { tagName: { cat?, img?, numeric?: {min,max,step} } }
 let currentView = 'log';
-let filterTag = '';
+let filterTag = ''; // tag name (kept for entry-row highlighting)
+let filterCat = '';  // category filter on log view
 let corrMin = 0;
+let corrMinDays = 3; // minimum co-occurrences to show
 let corrSort = {col:'phi', dir:'desc'};
 let corrSearch = '';
-let pendingRoleTags = []; // tags from the most recent entry waiting for role assignment
+let corrCatA = '';
+let corrCatB = '';
+let pendingRoleTags = [];
+let pendingNumericTags = []; // numeric tags in current log entry awaiting value input
 
 // Load
 try { const r = localStorage.getItem(STORAGE_KEY); if(r) entries = JSON.parse(r); } catch{}
 try { const r = localStorage.getItem(ROLES_KEY);   if(r) tagRoles = JSON.parse(r); } catch{}
+try { const r = localStorage.getItem(META_KEY);    if(r) tagMeta  = JSON.parse(r); } catch{}
 
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch{}
   try { localStorage.setItem(ROLES_KEY,   JSON.stringify(tagRoles)); } catch{}
+  try { localStorage.setItem(META_KEY,    JSON.stringify(tagMeta));  } catch{}
 }
 
 function setRole(tag, role) {
@@ -217,7 +247,6 @@ function roleLabel(tag) {
 }
 
 function roleBtns(tag, context) {
-  // context: 'inline' | 'tags'
   const r = tagRoles[tag]||'';
   return `
     <button class="role-btn ${r==='cause'?'active-cause':''}"  onclick="setRole('${escHtml(tag)}','cause')"  title="Cause — can drive effects">C</button>
@@ -226,8 +255,99 @@ function roleBtns(tag, context) {
   `;
 }
 
+// ── Category color palette ───────────────────────────────
+// Auto-assigns a stable color to each unique category name
+const CAT_PALETTE = [
+  '#4fc3f7','#81c784','#ffb74d','#f06292','#ce93d8',
+  '#80cbc4','#ff8a65','#a5d6a7','#fff176','#90caf9',
+  '#ef9a9a','#b39ddb','#80deea','#ffcc80','#c5e1a5'
+];
+const _catColorCache = {};
+function categoryColor(cat) {
+  if(!cat) return null;
+  if(_catColorCache[cat]) return _catColorCache[cat];
+  // Deterministic index from string hash
+  let h = 0;
+  for(let i=0;i<cat.length;i++) h = (h*31 + cat.charCodeAt(i)) & 0xffff;
+  _catColorCache[cat] = CAT_PALETTE[h % CAT_PALETTE.length];
+  return _catColorCache[cat];
+}
+
+function tagCategory(tag) {
+  return (tagMeta[tag] && tagMeta[tag].cat) || null;
+}
+function tagColor(tag) {
+  // Color comes from category, not stored per-tag anymore
+  return categoryColor(tagCategory(tag));
+}
+function tagImg(tag) {
+  return (tagMeta[tag] && tagMeta[tag].img) || null;
+}
+function allCategories() {
+  const cats = new Set();
+  for(const t of allTags()){ const c=tagCategory(t); if(c) cats.add(c); }
+  return [...cats].sort();
+}
+
+function tagPillStyle(tag) {
+  const col = tagColor(tag);
+  if(!col) return '';
+  const r=parseInt(col.slice(1,3),16), g=parseInt(col.slice(3,5),16), b=parseInt(col.slice(5,7),16);
+  return `background:rgba(${r},${g},${b},0.13);border-color:rgba(${r},${g},${b},0.4);color:${col};`;
+}
+function tagVisualPrefix(tag) {
+  const img = tagImg(tag);
+  if(img) return `<img src="${img}" style="width:26px;height:26px;border-radius:3px;object-fit:cover;margin-right:6px;vertical-align:middle;display:inline-block"/>`;
+  const col = tagColor(tag);
+  if(col) return `<span class="cat-dot" style="background:${col}"></span>`;
+  return '';
+}
+
+function setTagMeta(tag, key, value) {
+  if(!tagMeta[tag]) tagMeta[tag] = {};
+  if(value === null || value === undefined || value === '') delete tagMeta[tag][key];
+  else tagMeta[tag][key] = value;
+  if(Object.keys(tagMeta[tag]).length === 0) delete tagMeta[tag];
+  save();
+  render();
+}
+
+function handleTagImageUpload(tag, input) {
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 200*1024) { showToast('✕ image too large — max 200 KB', 'red'); return; }
+  const reader = new FileReader();
+  reader.onload = e => { setTagMeta(tag, 'img', e.target.result); };
+  reader.readAsDataURL(file);
+}
+
+// ── Numeric tag helpers ──────────────────────────────────
+function isNumericTag(tag) {
+  return !!(tagMeta[tag] && tagMeta[tag].numeric);
+}
+function tagNumericDef(tag) {
+  return (tagMeta[tag] && tagMeta[tag].numeric) || null;
+}
+function entryNumVal(entry, tag) {
+  return (entry.numericValues && entry.numericValues[tag] !== undefined)
+    ? entry.numericValues[tag] : undefined;
+}
+
 function parseText(t) {
-  return t.split(/[,;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean);
+  // Supports "mood:75", "mood=75" inline numeric syntax
+  const parts = t.split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+  const tags = [], inlineValues = {};
+  for(const p of parts){
+    const m = p.match(/^(.+?)[:=](-?\d+(?:\.\d+)?)$/);
+    if(m){
+      const tag = m[1].trim().toLowerCase();
+      tags.push(tag);
+      inlineValues[tag] = parseFloat(m[2]);
+    } else {
+      tags.push(p.toLowerCase());
+    }
+  }
+  return {tags, inlineValues};
 }
 
 function formatDate(iso) {
@@ -284,9 +404,42 @@ function toLocalDatetimeValue(d) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Temp store for pre-entry numeric values (before logging)
+let previewNumValues = {};
+
+function previewNumericPanel(inputStr) {
+  const {tags, inlineValues} = parseText(inputStr);
+  const panel = document.getElementById('num-input-panel');
+  if(!panel) return;
+  // Show sliders for known numeric tags that don't already have inline value
+  const numTags = tags.filter(t => isNumericTag(t) && inlineValues[t] === undefined);
+  if(!numTags.length){ panel.style.display='none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="num-panel">
+      <div style="color:#2a6050;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px">— values for this entry —</div>
+      ${numTags.map(t => {
+        const def = tagNumericDef(t);
+        const min = def.min, max = def.max, step = def.step||1;
+        const cur = previewNumValues[t] !== undefined ? previewNumValues[t] : Math.round((min+max)/2);
+        const col = tagColor(t) || '#00d4ff';
+        return `<div class="num-row">
+          <span class="num-label" style="${tagColor(t)?'color:'+tagColor(t):''}">${tagVisualPrefix(t)}${escHtml(t)}</span>
+          <input type="range" class="num-slider" min="${min}" max="${max}" step="${step}" value="${cur}"
+            oninput="previewNumValues['${escHtml(t)}']=+this.value;document.getElementById('pnv-${escHtml(t)}').value=this.value"
+            style="accent-color:${col}"/>
+          <input class="num-input" id="pnv-${escHtml(t)}" type="number"
+            min="${min}" max="${max}" step="${step}" value="${cur}"
+            oninput="previewNumValues['${escHtml(t)}']=+this.value"/>
+          <span style="color:#2a5040;font-size:10px">${min}–${max}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
 function addEntry() {
   const inp = document.getElementById('entry-input');
-  const tags = parseText(inp.value);
+  const {tags, inlineValues} = parseText(inp.value);
   if(!tags.length) return;
 
   const dtInput = document.getElementById('entry-dt');
@@ -297,12 +450,18 @@ function addEntry() {
     timestamp = new Date().toISOString();
   }
 
-  entries.unshift({id: Date.now().toString(), timestamp, tags, raw: inp.value.trim()});
+  // Build numericValues: inline values + whatever was set in the preview sliders
+  const numericValues = {...previewNumValues, ...inlineValues};
+  previewNumValues = {}; // reset
+
+  const entry = {id: Date.now().toString(), timestamp, tags, raw: inp.value.trim(), numericValues};
+  entries.unshift(entry);
   entries.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
   inp.value = '';
 
-  // Find tags that have no role yet — prompt inline
+  // Pending: roles for new tags, and numeric inputs for numeric tags without inline values
   pendingRoleTags = tags.filter(t => !tagRoles[t]);
+  pendingNumericTags = tags.filter(t => isNumericTag(t) && numericValues[t] === undefined);
 
   // Reset datetime picker
   dtInput.style.display = 'none';
@@ -311,14 +470,59 @@ function addEntry() {
   document.getElementById('dt-toggle-btn').textContent = '⏱ custom time';
   document.getElementById('dt-hint').style.display = 'none';
 
+  // Hide preview panel
+  const pp = document.getElementById('num-input-panel');
+  if(pp) pp.style.display='none';
+
   save();
   const btn = document.getElementById('log-btn');
   btn.textContent = '✓ logged';
   btn.classList.add('flash');
   setTimeout(()=>{btn.textContent='+ LOG';btn.classList.remove('flash');},600);
   render();
-  // After render, inject inline picker if there are unassigned tags
+  if(pendingNumericTags.length) renderNumericPanel(entry.id, pendingNumericTags);
   if(pendingRoleTags.length) renderInlineRolePicker(pendingRoleTags);
+}
+
+function renderNumericPanel(entryId, numTags) {
+  const panel = document.getElementById('num-input-panel');
+  if(!panel) return;
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="num-panel">
+      <div style="color:#2a6050;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px">— enter values —</div>
+      ${numTags.map(t => {
+        const def = tagNumericDef(t);
+        const min = def ? def.min : 0, max = def ? def.max : 100, step = def ? def.step : 1;
+        const mid = Math.round((min+max)/2);
+        const col = tagColor(t) || '#00d4ff';
+        return `<div class="num-row">
+          <span class="num-label" style="${tagColor(t)?'color:'+tagColor(t):''}">${tagVisualPrefix(t)}${escHtml(t)}</span>
+          <input type="range" class="num-slider" min="${min}" max="${max}" step="${step}" value="${mid}"
+            oninput="document.getElementById('nv-${entryId}-${escHtml(t)}').value=this.value;setEntryNumVal('${entryId}','${escHtml(t)}',+this.value)"
+            style="accent-color:${col}"/>
+          <input class="num-input" id="nv-${entryId}-${escHtml(t)}" type="number"
+            min="${min}" max="${max}" step="${step}" value="${mid}"
+            oninput="setEntryNumVal('${entryId}','${escHtml(t)}',+this.value)"/>
+          <span style="color:#2a5040;font-size:10px">${min}–${max}</span>
+        </div>`;
+      }).join('')}
+      <button class="io-btn" onclick="document.getElementById('num-input-panel').style.display='none'" style="font-size:10px;padding:3px 10px;margin-top:6px">done</button>
+    </div>`;
+}
+
+function setEntryNumVal(entryId, tag, value) {
+  const entry = entries.find(e=>e.id===entryId);
+  if(!entry) return;
+  if(!entry.numericValues) entry.numericValues = {};
+  entry.numericValues[tag] = value;
+  save();
+  // Refresh just the tag pills for this entry without full re-render
+  const row = document.getElementById('entry-tags-'+entryId);
+  if(row) {
+    const e = entries.find(x=>x.id===entryId);
+    if(e) row.innerHTML = e.tags.map(t => tagPillHtml(t, e, filterTag)).join('');
+  }
 }
 
 function renderInlineRolePicker(tags) {
@@ -368,11 +572,15 @@ function saveEdit(id) {
   const inp = document.getElementById('edit-inp-'+id);
   const dtInp = document.getElementById('edit-dt-'+id);
   if(!inp) return;
-  const tags = parseText(inp.value);
+  const {tags, inlineValues} = parseText(inp.value);
   if(!tags.length) return;
   const newTimestamp = (dtInp && dtInp.value) ? new Date(dtInp.value).toISOString() : undefined;
-  entries = entries.map(e => e.id===id ? {...e, tags, raw:inp.value.trim(), ...(newTimestamp ? {timestamp: newTimestamp} : {})} : e);
-  // Re-sort in case timestamp changed
+  entries = entries.map(e => {
+    if(e.id!==id) return e;
+    // Merge inline values into existing numericValues
+    const numericValues = {...(e.numericValues||{}), ...inlineValues};
+    return {...e, tags, raw:inp.value.trim(), numericValues, ...(newTimestamp ? {timestamp: newTimestamp} : {})};
+  });
   entries.sort((a,b) => b.timestamp.localeCompare(a.timestamp));
   save(); render();
 }
@@ -380,7 +588,13 @@ function saveEdit(id) {
 function cancelEdit(id) { render(); }
 
 function setFilter(t) {
-  filterTag = filterTag===t?'':t;
+  if(t===''){filterTag='';filterCat='';}
+  else{
+    // If tag has a category, filter by category instead
+    const cat=tagCategory(t);
+    if(cat){filterCat=cat;filterTag='';}
+    else{filterTag=filterTag===t?'':t;filterCat='';}
+  }
   render();
 }
 
@@ -405,16 +619,37 @@ function canBeEffect(tag) {
   return !r || r==='effect' || r==='both';
 }
 
+// ── Spearman rank correlation ────────────────────────────
+function spearman(xs, ys) {
+  // xs and ys are paired numeric arrays (same length, >= 3)
+  const n = xs.length;
+  if(n < 3) return null;
+  const rank = arr => {
+    const sorted = [...arr].map((v,i)=>({v,i})).sort((a,b)=>a.v-b.v);
+    const r = new Array(n);
+    for(let i=0;i<n;i++) r[sorted[i].i] = i+1;
+    return r;
+  };
+  const rx = rank(xs), ry = rank(ys);
+  let d2 = 0;
+  for(let i=0;i<n;i++) d2 += (rx[i]-ry[i])**2;
+  return 1 - (6*d2)/(n*(n*n-1));
+}
+
 function computeCorrelations() {
-  const byDate = {};
+  // Build per-day structures
+  const byDate = {}; // day -> { tag -> earliestMs }
+  const numByDate = {}; // day -> { tag -> latestNumericValue }
   for(const e of entries){
     const day = e.timestamp.slice(0,10);
     const ms = new Date(e.timestamp).getTime();
     if(!byDate[day]) byDate[day] = {};
+    if(!numByDate[day]) numByDate[day] = {};
     for(const t of e.tags){
-      if(byDate[day][t] === undefined || ms < byDate[day][t]){
+      if(byDate[day][t] === undefined || ms < byDate[day][t])
         byDate[day][t] = ms;
-      }
+      if(e.numericValues && e.numericValues[t] !== undefined)
+        numByDate[day][t] = e.numericValues[t];
     }
   }
 
@@ -423,28 +658,62 @@ function computeCorrelations() {
   if(tags.length < 2 || days.length < 2) return [];
 
   const results = [];
+
   for(let i=0;i<tags.length;i++){
     for(let j=0;j<tags.length;j++){
       if(i===j) continue;
       const a=tags[i], b=tags[j];
-      // Role filter: a must be a valid cause, b must be a valid effect
       if(!canBeCause(a) || !canBeEffect(b)) continue;
-      let n11=0, n10=0, n01=0, n00=0;
-      for(const day of days){
-        const tA = byDate[day][a];
-        const tB = byDate[day][b];
-        const aPresent = tA !== undefined;
-        const bAfterA  = tA !== undefined && tB !== undefined && tB > tA;
-        const bPresent = tB !== undefined;
-        if(aPresent && bAfterA)        n11++;
-        else if(aPresent && !bAfterA)  n10++;
-        else if(!aPresent && bPresent) n01++;
-        else                           n00++;
+
+      const aNum = isNumericTag(a);
+      const bNum = isNumericTag(b);
+
+      if(!aNum && !bNum) {
+        // ── Binary → Binary: directional phi ──
+        let n11=0,n10=0,n01=0,n00=0;
+        for(const day of days){
+          const tA=byDate[day][a], tB=byDate[day][b];
+          const aPresent=tA!==undefined;
+          const bAfterA=tA!==undefined&&tB!==undefined&&tB>tA;
+          const bPresent=tB!==undefined;
+          if(aPresent&&bAfterA) n11++;
+          else if(aPresent&&!bAfterA) n10++;
+          else if(!aPresent&&bPresent) n01++;
+          else n00++;
+        }
+        const denom=Math.sqrt((n11+n10)*(n01+n00)*(n11+n01)*(n10+n00));
+        if(!denom) continue;
+        const phi=(n11*n00-n10*n01)/denom;
+        results.push({a,b,phi,coOccurrences:n11,type:'bin-bin'});
+
+      } else if(aNum && bNum) {
+        // ── Numeric → Numeric: Spearman on days both have values ──
+        const xs=[], ys=[];
+        for(const day of days){
+          const va=numByDate[day][a], vb=numByDate[day][b];
+          if(va!==undefined && vb!==undefined){ xs.push(va); ys.push(vb); }
+        }
+        const r=spearman(xs,ys);
+        if(r===null) continue;
+        results.push({a,b,phi:r,coOccurrences:xs.length,type:'num-num'});
+
+      } else {
+        // ── Numeric → Binary or Binary → Numeric: Spearman(num, presence) ──
+        // numTag is the numeric one; binTag is binary
+        const numTag=aNum?a:b, binTag=aNum?b:a;
+        const xs=[], ys=[];
+        for(const day of days){
+          const nv=numByDate[day][numTag];
+          if(nv===undefined) continue;
+          const present=byDate[day][binTag]!==undefined?1:0;
+          xs.push(nv); ys.push(present);
+        }
+        const r=spearman(xs,ys);
+        if(r===null) continue;
+        // Keep direction: a is cause, b is effect regardless of which is numeric
+        const phi = aNum ? r : r; // direction preserved by role assignment
+        results.push({a,b,phi,coOccurrences:xs.length,type:aNum?'num-bin':'bin-num'});
       }
-      const denom = Math.sqrt((n11+n10)*(n01+n00)*(n11+n01)*(n10+n00));
-      if(!denom) continue;
-      const phi = (n11*n00 - n10*n01) / denom;
-      results.push({a, b, phi, coOccurrences:n11});
     }
   }
   return results.sort((x,y)=>Math.abs(y.phi)-Math.abs(x.phi));
@@ -464,15 +733,34 @@ function renderLog() {
   chips.innerHTML = SAMPLE_TAGS.map(t=>`<span class="suggest-chip" onclick="appendChip('${t}')">${t}</span>`).join('');
 
   const tags = allTags();
+  const cats = allCategories();
   const fs = document.getElementById('filter-section');
   const ft = document.getElementById('filter-tags');
   if(tags.length>0){
     fs.style.display='block';
-    ft.innerHTML = `<span class="tag-pill ${!filterTag?'active':''}" onclick="setFilter('')">all</span>`
-      + tags.map(t=>`<span class="tag-pill ${filterTag===t?'active':''}" onclick="setFilter('${escHtml(t)}')">${escHtml(t)}</span>`).join('');
+    // Show category chips; fall back to tag chips if no categories defined yet
+    if(cats.length>0){
+      ft.innerHTML = `<span class="cat-chip active-always ${!filterCat?'active':''}"
+          style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#c8d4e8"
+          onclick="filterCat='';renderLog()">all</span>`
+        + cats.map(c=>{
+            const col=categoryColor(c);
+            const r=parseInt(col.slice(1,3),16),g=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
+            const active=filterCat===c;
+            return `<span class="cat-chip ${active?'active':''}"
+              style="background:rgba(${r},${g},${b},${active?0.22:0.07});border-color:rgba(${r},${g},${b},${active?0.6:0.18});color:${col}"
+              onclick="filterCat='${escHtml(c)}';filterTag='';renderLog()">${escHtml(c)}</span>`;
+          }).join('');
+    } else {
+      // No categories yet — show tag pills as before
+      ft.innerHTML = `<span class="tag-pill ${!filterTag?'active':''}" onclick="setFilter('')">all</span>`
+        + tags.map(t=>`<span class="tag-pill ${filterTag===t?'active':''}" style="${tagPillStyle(t)}" onclick="setFilter('${escHtml(t)}')">${tagVisualPrefix(t)}${escHtml(t)}</span>`).join('');
+    }
   } else { fs.style.display='none'; }
 
-  const filtered = filterTag ? entries.filter(e=>e.tags.includes(filterTag)) : entries;
+  const filtered = filterCat
+    ? entries.filter(e=>e.tags.some(t=>tagCategory(t)===filterCat))
+    : (filterTag ? entries.filter(e=>e.tags.includes(filterTag)) : entries);
 
   // group by day
   const groups = {};
@@ -500,7 +788,7 @@ function renderLog() {
         <div class="entry-row fade-in">
           <span class="entry-time">${formatTime(e.timestamp)}</span>
           <div class="entry-tags" id="entry-tags-${e.id}">
-            ${e.tags.map(t=>`<span class="tag-pill ${filterTag===t?'active':''}" onclick="setFilter('${escHtml(t)}')">${escHtml(t)}${roleLabel(t)}</span>`).join('')}
+            ${e.tags.map(t=>tagPillHtml(t,e,filterTag)).join('')}
           </div>
           <div class="entry-actions">
             <button class="edit-btn" onclick="startEdit('${e.id}')">✎</button>
@@ -510,6 +798,15 @@ function renderLog() {
       `).join('')}
     </div>
   `).join('');
+}
+
+function tagPillHtml(t, entry, activeFilter) {
+  const val = entryNumVal(entry, t);
+  const def = tagNumericDef(t);
+  const numBadge = (val !== undefined)
+    ? `<span class="num-val">${val}<span style="font-size:9px;opacity:0.5">/${def?def.max:''}</span></span>`
+    : (def ? `<span class="num-val" style="opacity:0.35">?</span>` : '');
+  return `<span class="tag-pill ${activeFilter===t?'active':''}" style="${tagPillStyle(t)}" onclick="setFilter('${escHtml(t)}')">${tagVisualPrefix(t)}${escHtml(t)}${roleLabel(t)}${numBadge}</span>`;
 }
 
 function appendChip(t) {
@@ -526,41 +823,104 @@ function renderTags() {
   const counts = {};
   for(const e of entries) for(const t of e.tags) counts[t]=(counts[t]||0)+1;
 
-  const roleOrder = {cause:0, both:1, effect:2, undefined:3};
-  const sorted = [...tags].sort((a,b)=>{
-    const ra = roleOrder[tagRoles[a]] ?? 3;
-    const rb = roleOrder[tagRoles[b]] ?? 3;
-    if(ra!==rb) return ra-rb;
-    return a.localeCompare(b);
-  });
+  // Group tags by category; uncategorised goes last under ''
+  const groups = {}; // { cat: [tag, ...] }
+  for(const t of tags){
+    const c = tagCategory(t) || '';
+    if(!groups[c]) groups[c] = [];
+    groups[c].push(t);
+  }
+  // Sort: named categories alphabetically, then uncategorised
+  const sortedCats = Object.keys(groups).filter(c=>c).sort();
+  if(groups['']) sortedCats.push('');
 
-  el.innerHTML = `
-    <div style="color:#2a4060;font-size:11px;line-height:1.8;margin-bottom:16px">
-      Set each tag's role. Only <span class="role-badge role-cause">C</span> cause/both tags appear as the left side of correlations,
-      and only <span class="role-badge role-effect">E</span> effect/both tags appear on the right.
-      Unset tags are treated as <span class="role-badge role-both">~</span> both.
-    </div>
-    <div style="display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;padding:5px 10px;color:#2a4060;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;border-bottom:1px solid #1a2535;margin-bottom:4px">
-      <span></span><span>tag</span><span style="text-align:right;padding-right:8px">uses</span><span>role</span>
-    </div>
-    ${sorted.map(t=>{
-      const r = tagRoles[t];
-      const dot = r==='cause'?'#ffd060':r==='effect'?'#ff8fa3':r==='both'?'#c4a0ff':'#2a3a55';
-      return `<div class="tags-row">
-        <span style="width:6px;height:6px;border-radius:50%;background:${dot};display:inline-block;flex-shrink:0"></span>
-        <span class="tags-row-name">${escHtml(t)}${roleLabel(t)}</span>
-        <span style="color:#2a4060;font-size:11px;text-align:right;padding-right:16px">${counts[t]||0}×</span>
-        <span style="display:flex;gap:4px">${roleBtns(t,'tags')}</span>
-      </div>`;
-    }).join('')}
+  const tagRow = (t) => {
+    const cat = tagCategory(t) || '';
+    const col = categoryColor(cat);
+    const img = tagImg(t);
+    const dotStyle = col
+      ? `background:${col};border-color:${col}`
+      : 'background:#2a3a55;border-color:#3a5070';
+    return `<div class="tags-row">
+      <span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0">
+        ${img
+          ? `<img src="${img}" style="width:38px;height:38px;border-radius:4px;object-fit:cover;border:1px solid #2a3a55;flex-shrink:0"/>`
+          : `<span style="width:12px;height:12px;border-radius:50%;border:1px solid;${dotStyle};display:inline-block;flex-shrink:0"></span>`}
+        <span class="tags-row-name" style="${col?`color:${col}`:''}">
+          ${escHtml(t)}${roleLabel(t)}
+        </span>
+        <span style="color:#2a4060;font-size:10px;flex-shrink:0">${counts[t]||0}×</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <input class="input-field" placeholder="category…" value="${escHtml(cat)}"
+          style="width:110px;padding:3px 8px;font-size:11px"
+          onchange="setTagMeta('${escHtml(t)}','cat',this.value.trim().toLowerCase())"
+          onkeydown="if(event.key==='Enter'){setTagMeta('${escHtml(t)}','cat',this.value.trim().toLowerCase());this.blur()}"
+          list="cat-datalist"
+          title="Type a category name (e.g. food, mood, activity)"/>
+        <label title="Upload image (max 200 KB)" style="cursor:pointer">
+          <input type="file" accept="image/*" style="display:none" onchange="handleTagImageUpload('${escHtml(t)}',this)"/>
+          <span class="io-btn" style="padding:2px 8px;font-size:10px;pointer-events:none">📷</span>
+        </label>
+        ${img ? `<button class="role-btn" onclick="setTagMeta('${escHtml(t)}','img',null)" title="Remove image" style="color:#ff6b6b;border-color:#3a2030;font-size:10px">✕</button>` : ''}
+        ${renderNumericRangeBtn(t)}
+      </span>
+      <span style="display:flex;gap:3px;flex-shrink:0">${roleBtns(t,'tags')}</span>
+    </div>`;
+  };
+
+  // Build datalist of existing categories for autocomplete
+  const existingCats = allCategories();
+  const datalist = `<datalist id="cat-datalist">${existingCats.map(c=>`<option value="${escHtml(c)}">`).join('')}</datalist>`;
+
+  el.innerHTML = datalist + sortedCats.map(cat => {
+    const col = cat ? categoryColor(cat) : null;
+    const header = cat
+      ? `<div class="cat-group-header" style="color:${col};border-color:${col};background:rgba(${hexToRgb(col)},0.06)">${escHtml(cat)}</div>`
+      : `<div class="cat-group-header" style="color:#2a4060;border-color:#2a4060">uncategorised</div>`;
+    return header + groups[cat].map(tagRow).join('');
+  }).join('') + `
     <div style="margin-top:20px;padding:12px 14px;background:rgba(0,170,255,0.03);border:1px solid #1a2535;border-radius:3px;color:#3a5570;font-size:11px;line-height:1.8">
-      <strong style="color:#4a7090">Legend:</strong>
-      <span class="role-badge role-cause">C</span> Cause — can be the left side of a correlation (e.g. coffee, stress) ·
-      <span class="role-badge role-effect">E</span> Effect — can be the right side (e.g. headache, energy high) ·
-      <span class="role-badge role-both">~</span> Both — appears on either side ·
-      unset = treated as both
-    </div>
-  `;
+      Type a category to group tags — all tags in a category share a color. Categories appear as filters in Correlations.
+      Click <strong style="color:#c4a0ff"># numeric</strong> to make a tag numeric — set its min/max range. Then log values inline as <code>mood:75</code> or via the slider that appears after logging.
+      <br><span class="role-badge role-cause">C</span> Cause ·
+      <span class="role-badge role-effect">E</span> Effect ·
+      <span class="role-badge role-both">~</span> Both · unset = both ·
+      <span style="color:#c4a0ff">#</span> = numeric tag
+    </div>`;
+}
+
+function renderNumericRangeBtn(tag) {
+  const def = tagNumericDef(tag);
+  if(!def) {
+    return `<button class="role-btn" title="Make this a numeric tag"
+      onclick="setNumericDef('${escHtml(tag)}',0,100,1)"
+      style="font-size:10px;letter-spacing:0"># numeric</button>`;
+  }
+  return `<span style="display:inline-flex;align-items:center;gap:3px">
+    <span style="color:#c4a0ff;font-size:10px" title="Numeric tag: ${def.min}–${def.max} step ${def.step}">#</span>
+    <input class="num-input" type="number" value="${def.min}" title="min"
+      style="width:46px;padding:2px 5px;font-size:10px"
+      onchange="setNumericDef('${escHtml(tag)}',+this.value,${def.max},${def.step})"/>
+    <span style="color:#3a5070;font-size:10px">–</span>
+    <input class="num-input" type="number" value="${def.max}" title="max"
+      style="width:46px;padding:2px 5px;font-size:10px"
+      onchange="setNumericDef('${escHtml(tag)}',${def.min},+this.value,${def.step})"/>
+    <button class="role-btn" onclick="clearNumericDef('${escHtml(tag)}')" title="Remove numeric definition" style="color:#ff6b6b;border-color:#3a2030;font-size:10px">✕#</button>
+  </span>`;
+}
+
+function setNumericDef(tag, min, max, step) {
+  setTagMeta(tag, 'numeric', {min, max, step: step||1});
+}
+
+function clearNumericDef(tag) {
+  setTagMeta(tag, 'numeric', null);
+}
+
+function hexToRgb(hex) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
 }
 
 function sortCorrs(corrs) {
@@ -591,21 +951,35 @@ function renderCorrelations() {
   }
 
   const allCorrs = computeCorrelations();
+  const cats = allCategories();
   const arrow = col => {
     if(corrSort.col!==col) return '<span style="color:#1a2a3a">↕</span>';
     return corrSort.dir==='desc'?'↓':'↑';
   };
 
-  // Apply filters
   let visible = allCorrs.filter(c => {
     if(Math.abs(c.phi) < corrMin) return false;
-    if(corrSearch){
-      const s = corrSearch.toLowerCase();
-      if(!c.a.includes(s) && !c.b.includes(s)) return false;
-    }
+    if(c.coOccurrences < corrMinDays) return false;
+    if(corrSearch){ const s=corrSearch.toLowerCase(); if(!c.a.includes(s)&&!c.b.includes(s)) return false; }
+    if(corrCatA && tagCategory(c.a) !== corrCatA) return false;
+    if(corrCatB && tagCategory(c.b) !== corrCatB) return false;
     return true;
   });
   visible = sortCorrs(visible);
+
+  const catChips = (side) => {
+    if(!cats.length) return '';
+    const cur = side==='a' ? corrCatA : corrCatB;
+    const chips = cats.map(c=>{
+      const col = categoryColor(c);
+      const r=parseInt(col.slice(1,3),16),g=parseInt(col.slice(3,5),16),b=parseInt(col.slice(5,7),16);
+      const active = cur===c;
+      return `<span class="cat-chip ${active?'active':''}"
+        style="background:rgba(${r},${g},${b},${active?0.2:0.07});border-color:rgba(${r},${g},${b},${active?0.6:0.15});color:${col}"
+        onclick="${side==='a'?'corrCatA':'corrCatB'}='${active?'':escHtml(c)}';renderCorrelations()">${escHtml(c)}</span>`;
+    }).join('');
+    return `<span style="color:#2a4060;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;margin-right:2px">${side==='a'?'cause':'effect'}:</span>${chips}`;
+  };
 
   el.innerHTML = `
     <div class="corr-controls">
@@ -614,46 +988,65 @@ function renderCorrelations() {
         oninput="corrMin=this.value/100;document.getElementById('corr-min-val').textContent=corrMin.toFixed(2);renderCorrelations()"
         style="width:110px"/>
       <span id="corr-min-val" style="color:#7dd3fc;font-size:11px;min-width:28px">${corrMin.toFixed(2)}</span>
+      <span style="color:#4a6080;font-size:11px;margin-left:6px">min days</span>
+      <input type="range" min="1" max="20" value="${corrMinDays}"
+        oninput="corrMinDays=+this.value;document.getElementById('corr-min-days-val').textContent=this.value;renderCorrelations()"
+        style="width:80px"/>
+      <span id="corr-min-days-val" style="color:#7dd3fc;font-size:11px;min-width:18px">${corrMinDays}</span>
       <input class="corr-search" placeholder="🔍 filter by tag…" value="${escHtml(corrSearch)}"
         oninput="corrSearch=this.value;renderCorrelations()"/>
       <span style="color:#2a4060;font-size:11px;margin-left:4px">${visible.length} pair${visible.length===1?'':'s'}</span>
     </div>
+    ${cats.length ? `<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:5px">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">${catChips('a')}</div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">${catChips('b')}</div>
+    </div>` : ''}
     <div class="corr-table">
       <div class="corr-header corr-cols corr-row">
         <span onclick="setSort('a')" class="${corrSort.col==='a'?'sort-active':''}">cause ${arrow('a')}</span>
         <span></span>
         <span onclick="setSort('b')" class="${corrSort.col==='b'?'sort-active':''}">effect ${arrow('b')}</span>
-        <span onclick="setSort('phi')" class="${corrSort.col==='phi'?'sort-active':''}">φ strength ${arrow('phi')}</span>
+        <span onclick="setSort('phi')" class="${corrSort.col==='phi'?'sort-active':''}">φ / ρ ${arrow('phi')}</span>
         <span>correlation bar</span>
         <span onclick="setSort('n')" class="${corrSort.col==='n'?'sort-active':''}">days ${arrow('n')}</span>
+        <span>type</span>
       </div>
       ${visible.length===0
         ? '<div class="empty" style="padding:30px 10px">No pairs match the current filters.</div>'
-        : visible.slice(0,120).map(({a,b,phi,coOccurrences})=>{
+        : visible.slice(0,120).map(({a,b,phi,coOccurrences,type})=>{
           const col = phiColor(phi);
           const barLeft = phi>=0 ? 50 : 50+phi*50;
           const barW = Math.abs(phi)*50;
+          const typeBadge = type==='num-num'
+            ? `<span class="corr-type" style="background:rgba(200,160,255,0.12);color:#c4a0ff;border:1px solid rgba(200,160,255,0.25)" title="Spearman: numeric→numeric">#→#</span>`
+            : type==='num-bin'
+            ? `<span class="corr-type" style="background:rgba(255,180,80,0.12);color:#ffb74d;border:1px solid rgba(255,180,80,0.25)" title="Spearman: numeric→binary">#→○</span>`
+            : type==='bin-num'
+            ? `<span class="corr-type" style="background:rgba(80,200,255,0.12);color:#4fc3f7;border:1px solid rgba(80,200,255,0.25)" title="Spearman: binary→numeric">○→#</span>`
+            : `<span class="corr-type" style="background:rgba(100,160,100,0.1);color:#81c784;border:1px solid rgba(100,160,100,0.2)" title="Phi: binary→binary">○→○</span>`;
+          const statLabel = (type&&type!=='bin-bin') ? 'ρ' : 'φ';
           return `<div class="corr-row corr-cols">
-            <span class="tag-pill" style="cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${escHtml(a)}">${escHtml(a)}</span>
+            <span class="tag-pill" style="cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;min-width:0;${tagPillStyle(a)}" title="${escHtml(a)}">${tagVisualPrefix(a)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(a)}</span></span>
             <span class="arrow-col">→</span>
-            <span class="tag-pill" style="cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${escHtml(b)}">${escHtml(b)}</span>
-            <span class="phi-val" style="color:${col}">${phi>0?'+':''}${phi.toFixed(3)}</span>
+            <span class="tag-pill" style="cursor:default;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;min-width:0;${tagPillStyle(b)}" title="${escHtml(b)}">${tagVisualPrefix(b)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(b)}</span></span>
+            <span class="phi-val" style="color:${col}">${phi>0?'+':''}${phi.toFixed(3)}<span style="font-size:9px;opacity:0.6;margin-left:2px">${statLabel}</span></span>
             <div class="bar-wrap">
               <div class="bar-bg"></div>
               <div class="bar-fill" style="background:${col};left:${barLeft}%;width:${barW}%"></div>
               <div class="bar-center"></div>
             </div>
             <span style="color:#4a6080;font-size:11px;text-align:right">${coOccurrences}d</span>
+            ${typeBadge}
           </div>`;
         }).join('')
       }
     </div>
     <div class="corr-info">
-      <span style="color:#00d4ff">Directional φ</span>: each row shows <em>cause → effect</em> — only days where the cause was logged <strong>before</strong> the effect count toward the score.
-      <span style="color:#00ff9d">+1.0</span> = cause always precedes effect ·
-      <span style="color:#ff4d6d">−1.0</span> = cause never precedes effect ·
-      <span style="color:#8892a4">0</span> = no pattern.
-      Days are the unit — multiple logs per day use the earliest timestamp per tag.
+      <span style="color:#00d4ff">○→○ φ (phi)</span>: binary→binary directional — days where cause logged <strong>before</strong> effect. ·
+      <span style="color:#c4a0ff">#→# ρ</span>: numeric→numeric Spearman rank. ·
+      <span style="color:#ffb74d">#→○ ρ</span>: numeric value vs. binary presence. ·
+      <span style="color:#4fc3f7">○→# ρ</span>: binary presence vs. numeric value.<br>
+      <span style="color:#00ff9d">+1.0</span> = strong positive · <span style="color:#ff4d6d">−1.0</span> = strong negative · <span style="color:#8892a4">0</span> = no pattern.
     </div>
   `;
 }
@@ -674,38 +1067,40 @@ function renderHeatmap() {
   let maxH=1;
   for(const row of Object.values(grid)) for(const v of row) if(v>maxH) maxH=v;
 
-  const cols = '120px '+Array(24).fill('28px').join(' ');
+  const cellW = 28, gap = 2;
+  const cols = `120px repeat(24, ${cellW}px)`;
 
+  // Header: one label per column, showing every 3rd hour to avoid crowding
   const hourLabels = Array.from({length:24},(_,h)=>
-    `<div style="color:#2a3a55;font-size:10px;text-align:center">${h%4===0?h+'h':''}</div>`
-  ).join('');
-  const hourNums = Array.from({length:24},(_,h)=>
-    `<div style="color:#2a3a55;font-size:9px;text-align:center">${h}</div>`
+    `<div style="color:${h%3===0?'#4a6a8a':'#2a3a55'};font-size:${h%6===0?'10':'9'}px;text-align:center;font-weight:${h%6===0?'600':'400'}">${h%3===0?h+'h':''}</div>`
   ).join('');
 
   const rows = tags.map(tag=>{
+    const col = tagColor(tag);
+    const img = tagImg(tag);
+    const nameStyle = col ? `color:${col}` : 'color:#7dd3fc';
+    const prefix = img
+      ? `<img src="${img}" style="width:22px;height:22px;border-radius:3px;object-fit:cover;margin-right:6px;vertical-align:middle;display:inline-block"/>`
+      : col ? `<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${col};margin-right:7px;vertical-align:middle"></span>` : '';
     const cells = grid[tag].map((val,h)=>{
       const intensity=val/maxH;
       const bg=val===0?'#0d1420':`rgba(0,${Math.round(120+intensity*135)},${Math.round(180+intensity*75)},${(0.15+intensity*0.85).toFixed(2)})`;
       const txt=val>0?`<span style="font-size:9px;color:${intensity>0.5?'#fff':'#7dd3fc'};opacity:0.9">${val}</span>`:'';
-      return `<div class="heat-cell" title="${escHtml(tag)} @ ${h}:00 — ${val} time(s)" style="width:28px;height:22px;background:${bg}">${txt}</div>`;
+      return `<div class="heat-cell" title="${escHtml(tag)} @ ${h}:00 — ${val} time(s)" style="width:${cellW}px;height:22px;background:${bg}">${txt}</div>`;
     }).join('');
-    return `<div class="heat-row" style="display:grid;grid-template-columns:${cols};gap:2px">
-      <div style="color:#7dd3fc;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;line-height:22px">${escHtml(tag)}</div>
+    return `<div style="display:grid;grid-template-columns:${cols};gap:${gap}px;margin-bottom:${gap}px;align-items:center">
+      <div style="${nameStyle};font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px;line-height:22px">${prefix}${escHtml(tag)}</div>
       ${cells}
     </div>`;
   }).join('');
 
   el.innerHTML = `
     <div class="heat-grid">
-      <div style="display:grid;grid-template-columns:${cols};gap:2px;margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:${cols};gap:${gap}px;margin-bottom:6px;align-items:end">
         <div></div>${hourLabels}
       </div>
       ${rows}
-      <div style="display:grid;grid-template-columns:${cols};gap:2px;margin-top:8px">
-        <div></div>${hourNums}
-      </div>
-      <div style="margin-top:20px;color:#2a3a55;font-size:11px">Showing frequency of each tag by hour of day. Hover cells for details.</div>
+      <div style="margin-top:16px;color:#2a3a55;font-size:11px">Frequency of each tag by hour of day. Hover cells for details.</div>
     </div>
   `;
 }
@@ -716,7 +1111,8 @@ function exportData() {
     version: 2,
     exportedAt: new Date().toISOString(),
     entries: entries,
-    tagRoles: tagRoles
+    tagRoles: tagRoles,
+    tagMeta: tagMeta
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -748,7 +1144,10 @@ function importData(event) {
       entries = merged;
       // Merge tagRoles if present in backup
       if(data.tagRoles && typeof data.tagRoles==='object'){
-        tagRoles = {...data.tagRoles, ...tagRoles}; // existing roles take priority
+        tagRoles = {...data.tagRoles, ...tagRoles};
+      }
+      if(data.tagMeta && typeof data.tagMeta==='object'){
+        tagMeta = {...data.tagMeta, ...tagMeta};
       }
       save();
       render();
