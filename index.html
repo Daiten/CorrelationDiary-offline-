@@ -388,6 +388,19 @@ function roleBtns(tag, context) {
   `;
 }
 
+function sentimentBtns(tag) {
+  const s = tagSentiment(tag)||'';
+  const mkBtn = (val, emoji, title) => {
+    const active = s===val;
+    const styles = val==='positive'?'rgba(0,220,100,0.15);border-color:rgba(0,220,100,0.4)':
+                   val==='negative'?'rgba(255,60,80,0.15);border-color:rgba(255,60,80,0.4)':
+                                    'rgba(150,150,150,0.15);border-color:rgba(150,150,150,0.4)';
+    return `<button class="role-btn" onclick="setTagMeta('${escHtml(tag)}','sentiment',tagSentiment('${escHtml(tag)}')==='${val}'?null:'${val}')"
+      title="${title}" style="font-size:12px;padding:1px 6px;${active?'background:'+styles:''}">${emoji}</button>`;
+  };
+  return mkBtn('positive','😊','Positive effect') + mkBtn('neutral','😐','Neutral') + mkBtn('negative','😞','Negative effect');
+}
+
 // ── Category color palette ───────────────────────────────
 // Auto-assigns a stable color to each unique category name
 const CAT_PALETTE = [
@@ -415,6 +428,50 @@ function tagColor(tag) {
 }
 function tagImg(tag) {
   return (tagMeta[tag] && tagMeta[tag].img) || null;
+}
+function tagSentiment(tag) {
+  return (tagMeta[tag] && tagMeta[tag].sentiment) || null;
+}
+function sentimentWeight(tag) {
+  const s = tagSentiment(tag);
+  return s==='positive' ? 1 : s==='negative' ? -1 : 0;
+}
+function sentimentBadge(s) {
+  if(s==='positive') return '<span style="font-size:13px" title="positive effect">😊</span>';
+  if(s==='negative') return '<span style="font-size:13px" title="negative effect">😞</span>';
+  if(s==='neutral')  return '<span style="font-size:13px" title="neutral effect">😐</span>';
+  return '';
+}
+function computeCauseScore(causeTag, lag) {
+  const corrs = computeCorrelationsWithLag(lag);
+  let score = 0, count = 0;
+  for(const {a,b,phi,coOccurrences} of corrs) {
+    if(a !== causeTag) continue;
+    const w = sentimentWeight(b);
+    if(w === 0) continue;
+    const conf = Math.min(coOccurrences / 10, 1);
+    score += phi * w * conf;
+    count++;
+  }
+  return count ? score : null;
+}
+function causeScoreHtml(tag) {
+  if(!canBeCause(tag)) return '';
+  const s0 = computeCauseScore(tag, 0);
+  const s1 = computeCauseScore(tag, 1);
+  if(s0===null && s1===null) return '';
+  const fmt = v => {
+    if(v===null) return '<span style="color:#2a4060">—</span>';
+    const col = v>0.1?'#00ff9d':v<-0.1?'#ff4d6d':'#8892a4';
+    return `<span style="color:${col};font-weight:600">${v>0?'+':''}${v.toFixed(2)}</span>`;
+  };
+  const combined = (s0!==null && s1!==null) ? (s0+s1)/2 : (s0??s1);
+  const combCol = combined>0.1?'#00ff9d':combined<-0.1?'#ff4d6d':'#8892a4';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:rgba(255,255,255,0.03);border:1px solid #1a2535;border-radius:3px;padding:2px 7px;flex-shrink:0" title="Impact score&#10;Same-day: ${s0!==null?s0.toFixed(2):'—'} · Lag-1: ${s1!==null?s1.toFixed(2):'—'}&#10;= Σ(phi × effect_sentiment × confidence)">
+    <span style="color:#2a4060">impact</span>
+    <span style="color:${combCol};font-weight:700">${combined>0?'+':''}${combined.toFixed(2)}</span>
+    <span style="color:#2a4060;font-size:9px">(${fmt(s0)} / ${fmt(s1)})</span>
+  </span>`;
 }
 function allCategories() {
   const cats = new Set();
@@ -1124,9 +1181,10 @@ function renderTags() {
           ? `<img src="${img}" style="width:38px;height:38px;border-radius:4px;object-fit:cover;border:1px solid #2a3a55;flex-shrink:0"/>`
           : `<span style="width:12px;height:12px;border-radius:50%;border:1px solid;${dotStyle};display:inline-block;flex-shrink:0"></span>`}
         <span class="tags-row-name" style="${col?`color:${col}`:''}">
-          ${escHtml(t)}${roleLabel(t)}
+          ${escHtml(t)}${roleLabel(t)}${sentimentBadge(tagSentiment(t))}
         </span>
         <span style="color:#2a4060;font-size:10px;flex-shrink:0">${counts[t]||0}×</span>
+        ${causeScoreHtml(t)}
       </span>
       <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <input class="input-field" placeholder="category…" value="${escHtml(cat)}"
@@ -1143,6 +1201,7 @@ function renderTags() {
         ${renderNumericRangeBtn(t)}
       </span>
       <span style="display:flex;gap:3px;flex-shrink:0">${roleBtns(t,'tags')}</span>
+      <span style="display:flex;gap:2px;flex-shrink:0">${sentimentBtns(t)}</span>
     </div>`;
   };
 
@@ -1163,7 +1222,8 @@ function renderTags() {
       <br><span class="role-badge role-cause">C</span> Cause ·
       <span class="role-badge role-effect">E</span> Effect ·
       <span class="role-badge role-both">~</span> Both · unset = both ·
-      <span style="color:#c4a0ff">#</span> = numeric tag
+      <span style="color:#c4a0ff">#</span> = numeric ·
+      😊😐😞 = effect sentiment (scores causes: impact = Σ φ × sentiment, same-day / lag-1)
     </div>`;
 }
 
