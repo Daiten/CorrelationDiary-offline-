@@ -113,6 +113,18 @@
   .cat-chip.active{opacity:1;border-color:rgba(255,255,255,0.3);}
   /* category group header in tags screen */
   .cat-group-header{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;padding:4px 10px;margin:12px 0 4px;border-left:3px solid;}
+  /* tag detail panel */
+  .tag-panel{position:fixed;top:0;right:0;width:360px;max-width:95vw;height:100vh;background:#0b1018;border-left:1px solid #1a2535;z-index:200;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,0.5);transform:translateX(100%);transition:transform 0.22s ease;}
+  .tag-panel.open{transform:translateX(0);}
+  .tag-panel-head{padding:16px 18px 12px;border-bottom:1px solid #1a2535;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+  .tag-panel-body{flex:1;overflow-y:auto;padding:14px 18px;}
+  .tag-panel-section{margin-bottom:20px;}
+  .tag-panel-section-label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#2a4060;margin-bottom:8px;}
+  .tag-corr-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #0e1620;}
+  .tag-corr-row:last-child{border-bottom:none;}
+  .tag-corr-name{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tag-corr-phi{font-size:12px;font-weight:600;min-width:52px;text-align:right;}
+  .tag-panel-overlay{position:fixed;inset:0;z-index:199;background:rgba(0,0,0,0.25);}
   /* numeric value badge on tag pills */
   .num-val{font-size:10px;opacity:0.85;margin-left:4px;font-weight:600;}
   /* numeric input panel */
@@ -182,6 +194,16 @@
   <div id="view-heatmap" style="display:none">
     <div class="section-label">— time-of-day heatmap (top 12 tags) —</div>
     <div id="heatmap-content"></div>
+  </div>
+
+  <!-- TAG DETAIL PANEL -->
+  <div class="tag-panel-overlay" id="tag-panel-overlay" style="display:none" onclick="closeTagPanel()"></div>
+  <div class="tag-panel" id="tag-panel">
+    <div class="tag-panel-head">
+      <span id="tag-panel-title" style="font-size:14px;font-weight:600;color:#e0eaf8;flex:1"></span>
+      <button onclick="closeTagPanel()" style="background:none;border:none;color:#4a6080;font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <div class="tag-panel-body" id="tag-panel-body"></div>
   </div>
 
   <!-- TAGS VIEW -->
@@ -603,14 +625,94 @@ function saveEdit(id) {
 function cancelEdit(id) { render(); }
 
 function setFilter(t) {
-  if(t===''){filterTag='';filterCat='';}
+  if(t===''){filterTag='';filterCat='';closeTagPanel();}
   else{
-    // If tag has a category, filter by category instead
+    openTagPanel(t);
     const cat=tagCategory(t);
     if(cat){filterCat=cat;filterTag='';}
     else{filterTag=filterTag===t?'':t;filterCat='';}
   }
   render();
+}
+
+function openTagPanel(tag) {
+  document.getElementById('tag-panel-title').innerHTML = tagVisualPrefix(tag) + escHtml(tag);
+  document.getElementById('tag-panel-body').innerHTML = buildTagPanel(tag);
+  document.getElementById('tag-panel').classList.add('open');
+  document.getElementById('tag-panel-overlay').style.display = 'block';
+}
+
+function closeTagPanel() {
+  document.getElementById('tag-panel').classList.remove('open');
+  document.getElementById('tag-panel-overlay').style.display = 'none';
+}
+
+function buildTagPanel(tag) {
+  // Compute top correlations for this tag at lag 0 and lag 1
+  const sections = [];
+  for(const lag of [0, 1]) {
+    const prev = corrLag;
+    corrLag = lag;
+    const all = computeCorrelations();
+    corrLag = prev;
+
+    // Pairs where this tag is involved (either side)
+    const pairs = all.filter(p => p.a===tag || p.b===tag)
+      .sort((x,y) => Math.abs(y.phi)-Math.abs(x.phi))
+      .slice(0, 8);
+
+    if(!pairs.length) {
+      sections.push(`<div class="tag-panel-section">
+        <div class="tag-panel-section-label">${lag===0?'same day':'next day (lag 1)'}</div>
+        <div style="color:#2a4060;font-size:11px">No correlations yet — need more data.</div>
+      </div>`);
+      continue;
+    }
+
+    const rows = pairs.map(({a,b,phi,coOccurrences,type}) => {
+      const isA = a===tag;
+      const other = isA ? b : a;
+      const direction = isA ? '→' : '←';
+      const col = phiColor(phi);
+      const typeBadge = type==='num-num'?'#↔#':type==='num-bin'?'#→○':type==='bin-num'?'○→#':'○↔○';
+      return `<div class="tag-corr-row">
+        <span style="color:#2a4060;font-size:10px;width:16px;text-align:center;flex-shrink:0">${direction}</span>
+        <span class="tag-corr-name" style="${tagPillStyle(other)}">${tagVisualPrefix(other)}${escHtml(other)}</span>
+        <span style="color:#2a4060;font-size:10px;flex-shrink:0">${coOccurrences}d</span>
+        <span style="color:#2a4060;font-size:9px;flex-shrink:0">${typeBadge}</span>
+        <span class="tag-corr-phi" style="color:${col}">${phi>0?'+':''}${phi.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+
+    sections.push(`<div class="tag-panel-section">
+      <div class="tag-panel-section-label">${lag===0?'same day':'next day (lag 1)'}</div>
+      ${rows}
+    </div>`);
+  }
+
+  // Also show numeric stats if it's a numeric tag
+  const def = tagNumericDef(tag);
+  let numStats = '';
+  if(def) {
+    const vals = entries.flatMap(e => {
+      const v = entryNumVal(e, tag);
+      return v !== undefined ? [v] : [];
+    });
+    if(vals.length) {
+      const avg = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1);
+      const mn = Math.min(...vals), mx = Math.max(...vals);
+      numStats = `<div class="tag-panel-section">
+        <div class="tag-panel-section-label">numeric stats (${vals.length} readings)</div>
+        <div style="display:flex;gap:16px;font-size:12px">
+          <span style="color:#4a6080">avg <span style="color:#7dd3fc">${avg}</span></span>
+          <span style="color:#4a6080">min <span style="color:#7dd3fc">${mn}</span></span>
+          <span style="color:#4a6080">max <span style="color:#7dd3fc">${mx}</span></span>
+        </div>
+      </div>`;
+    }
+  }
+
+  return numStats + sections.join('');
 }
 
 function escHtml(s) {
